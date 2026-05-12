@@ -69,7 +69,7 @@ export default function App() {
 const fetchEntries = async () => {
   try {
     const response = await fetch(
-      'http://localhost:3000/entries'
+      'https://software-de-seguridad.onrender.com/entries'
     );
 
     const data = await response.json();

@@ -43,7 +43,7 @@ export default function Salidas({ entries, setEntries }: Props) {
       const now = new Date();
 
       // 🔥 1. Actualizar backend (ajusta endpoint si es necesario)
-      const response = await fetch('http://localhost:3000/exits', {
+      const response = await fetch('https://software-de-seguridad.onrender.com/exits', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
