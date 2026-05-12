@@ -43,7 +43,7 @@ export default function Salidas({ entries, setEntries }: Props) {
       const now = new Date();
 
       // 🔥 1. Actualizar backend (ajusta endpoint si es necesario)
-      const response = await fetch('https://software-de-seguridad.onrender.com/exits', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/exits`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

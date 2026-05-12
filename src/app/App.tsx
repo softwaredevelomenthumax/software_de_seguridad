@@ -69,7 +69,7 @@ export default function App() {
 const fetchEntries = async () => {
   try {
     const response = await fetch(
-      'https://software-de-seguridad.onrender.com/entries'
+      `${import.meta.env.VITE_API_URL}/entries`
     );
 
     const data = await response.json();
