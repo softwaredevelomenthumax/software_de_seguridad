@@ -1,29 +1,17 @@
 import { useState } from 'react';
+import type { EntryRecord } from '../app/App';
 
-interface EntryRecord {
-  id: string;
-  collaboratorId: string;
-  collaboratorName: string;
-  collaboratorDocument: string;
-  objectName: string;
-  objectDescription: string;
-  category: string;
-  photo?: string;
-  signature: string;
-  entryDate: string;
-  entryTime: string;
-  notes: string;
-  exitDate?: string;
-  exitTime?: string;
-  status?: string;
-}
-
-interface Props {
+interface SalidasProps {
   entries: EntryRecord[];
   setEntries: React.Dispatch<React.SetStateAction<EntryRecord[]>>;
+  onDelete: (id: string) => void;
 }
 
-export default function Salidas({ entries, setEntries }: Props) {
+export default function Salidas({
+  entries,
+  setEntries,
+  onDelete,
+}: SalidasProps) {
   const [document, setDocument] = useState('');
   const [selectedObject, setSelectedObject] = useState('');
 
@@ -42,8 +30,7 @@ export default function Salidas({ entries, setEntries }: Props) {
     try {
       const now = new Date();
 
-      // 🔥 1. Actualizar backend (ajusta endpoint si es necesario)
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/exits`, {
+      const res = await fetch(`http://localhost:3000/exits`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -54,29 +41,14 @@ export default function Salidas({ entries, setEntries }: Props) {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Error en el servidor');
-      }
+      if (!res.ok) throw new Error('Error al registrar salida');
 
-      // 🔥 2. Actualizar frontend sin recargar página
-      const updatedEntries = entries.map((item) => {
-        if (item.id === selectedObject && item.status !== 'SALIDA') {
-          return {
-            ...item,
-            status: 'SALIDA',
-            exitDate: now.toLocaleDateString('es-ES'),
-            exitTime: now.toLocaleTimeString('es-ES', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
-          };
-        }
-        return item;
-      });
+      // 🔥 RELOAD REAL DESDE BACKEND
+      const updated = await fetch('http://localhost:3000/entries');
+      const data = await updated.json();
 
-      setEntries(updatedEntries);
+      setEntries(Array.isArray(data) ? data : []);
 
-      // 🔥 3. Limpiar formulario
       setDocument('');
       setSelectedObject('');
 
@@ -89,29 +61,29 @@ export default function Salidas({ entries, setEntries }: Props) {
 
   return (
     <div>
+
+      {/* FORM */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
         <div>
           <label className="block mb-2 font-medium">Documento</label>
           <input
-            type="text"
             value={document}
             onChange={(e) => setDocument(e.target.value)}
-            placeholder="Ingrese documento"
-            className="w-full border border-gray-300 rounded-lg p-3"
+            className="w-full border p-3 rounded-lg"
+            placeholder="Documento"
           />
         </div>
 
         <div>
-          <label className="block mb-2 font-medium">
-            Objetos Activos
-          </label>
+          <label className="block mb-2 font-medium">Objetos activos</label>
 
           <select
             value={selectedObject}
             onChange={(e) => setSelectedObject(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-3"
+            className="w-full border p-3 rounded-lg"
           >
-            <option value="">Seleccione objeto</option>
+            <option value="">Seleccione</option>
 
             {activeEntries.map((item) => (
               <option key={item.id} value={item.id}>
@@ -120,56 +92,68 @@ export default function Salidas({ entries, setEntries }: Props) {
             ))}
           </select>
         </div>
+
       </div>
 
       <button
         onClick={registerExit}
-        className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg"
+        className="bg-red-600 text-white px-6 py-3 rounded-lg"
       >
         Registrar Salida
       </button>
 
+      {/* TABLE */}
       <div className="mt-10 overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-100">
+          <thead>
             <tr>
-              <th className="p-3 text-left">Documento</th>
-              <th className="p-3 text-left">Objeto</th>
-              <th className="p-3 text-left">Ingreso</th>
-              <th className="p-3 text-left">Salida</th>
-              <th className="p-3 text-left">Estado</th>
+              <th>Documento</th>
+              <th>Objeto</th>
+              <th>Ingreso</th>
+              <th>Salida</th>
+              <th>Estado</th>
+              <th>Acción</th>
             </tr>
           </thead>
 
           <tbody>
             {entries.map((item) => (
               <tr key={item.id} className="border-b">
-                <td className="p-3">{item.collaboratorDocument}</td>
-                <td className="p-3">{item.objectName}</td>
-                <td className="p-3">
-                  {item.entryDate} - {item.entryTime}
-                </td>
-                <td className="p-3">
+
+                <td>{item.collaboratorDocument}</td>
+                <td>{item.objectName}</td>
+                <td>{item.entryDate} - {item.entryTime}</td>
+                <td>
                   {item.exitDate
                     ? `${item.exitDate} - ${item.exitTime}`
                     : '---'}
                 </td>
-                <td className="p-3">
-                  <span
-                    className={`px-3 py-1 rounded-full text-white text-sm ${
-                      item.status === 'SALIDA'
-                        ? 'bg-red-600'
-                        : 'bg-green-600'
-                    }`}
-                  >
-                    {item.status === 'SALIDA' ? 'FUERA' : 'DENTRO'}
-                  </span>
+
+                <td>
+                  {item.status === 'SALIDA' ? 'FUERA' : 'DENTRO'}
                 </td>
+
+                <td>
+                  <button
+                    onClick={() => {
+                      const ok = window.confirm(
+                        '¿Seguro que deseas eliminar?'
+                      );
+
+                      if (ok) onDelete(item.id);
+                    }}
+                    className="bg-red-500 text-white px-3 py-1 rounded"
+                  >
+                    Eliminar
+                  </button>
+                </td>
+
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
     </div>
   );
 }

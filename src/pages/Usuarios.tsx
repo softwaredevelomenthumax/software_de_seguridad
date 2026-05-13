@@ -22,10 +22,14 @@ export default function Usuarios() {
     fetchUsers();
   }, []);
 
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+    const isAdmin = user.role === 'admin';
+
   const fetchUsers = async () => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/auth/users`
+        'http://localhost:3000/auth/users'
       );
 
       const data = await response.json();
@@ -36,10 +40,15 @@ export default function Usuarios() {
     }
   };
 
+  if (!isAdmin) {
+  alert('No tienes permisos');
+  return;
+}
+
   const createUser = async () => {
     try {
       await fetch(
-        `${import.meta.env.VITE_API_URL}/auth/register`,
+        'http://localhost:3000/auth/register',
         {
           method: 'POST',
           headers: {

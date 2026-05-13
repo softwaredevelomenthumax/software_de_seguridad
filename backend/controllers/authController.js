@@ -1,8 +1,6 @@
 const db = require('../db');
 
 const login = (req, res) => {
-  console.log(req.body);
-
   const { username, password } = req.body;
 
   const sql = `
@@ -15,32 +13,26 @@ const login = (req, res) => {
     sql,
     [username, password],
     (err, results) => {
-
-      console.log(err);
-      console.log(results);
-
       if (err) {
         return res.status(500).json({
-          error: err
+          error: err,
         });
       }
 
       if (results.length > 0) {
         return res.json({
           success: true,
-            user: results[0]
+          user: results[0],
         });
       }
 
       return res.status(401).json({
-        success: false
+        success: false,
+        message:
+          'Usuario o contraseña incorrectos',
       });
     }
   );
-};
-
-module.exports = {
-  login,
 };
 
 const register = (req, res) => {
@@ -59,7 +51,7 @@ const register = (req, res) => {
   db.query(
     sql,
     [username, password, role],
-    (err, result) => {
+    (err) => {
       if (err) {
         return res.status(500).json(err);
       }
@@ -69,11 +61,6 @@ const register = (req, res) => {
       });
     }
   );
-};
-
-module.exports = {
-  login,
-  register
 };
 
 const getUsers = (req, res) => {
@@ -94,5 +81,5 @@ const getUsers = (req, res) => {
 module.exports = {
   login,
   register,
-  getUsers
+  getUsers,
 };

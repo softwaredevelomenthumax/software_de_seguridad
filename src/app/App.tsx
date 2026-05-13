@@ -6,14 +6,21 @@ import {
   History,
   ArrowDownCircle,
 } from 'lucide-react';
+
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 import { LoginScreen } from './components/LoginScreen';
 import { MetricCard } from './components/MetricCard';
 import { CollaboratorsList } from './components/CollaboratorsList';
 import { EntryForm } from './components/EntryForm';
 import { HistoryTable } from './components/HistoryTable';
-import Salidas from "../pages/Salidas";
+
+import Salidas from '../pages/Salidas';
 import Usuarios from '../pages/Usuarios';
 
+// ---------------- TYPES ----------------
 export interface Collaborator {
   id: string;
   fullName: string;
@@ -35,54 +42,33 @@ export interface EntryRecord {
   entryDate: string;
   entryTime: string;
   notes: string;
+  exitDate?: string;
+  exitTime?: string;
+  status?: string;
 }
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+
   const [entries, setEntries] = useState<EntryRecord[]>([]);
-  const user = JSON.parse(
-    localStorage.getItem('user') || '{}'
-  );
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
 
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
+  const [toast, setToast] = useState('');
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2500);
+  };
+
+  // ---------------- LOGIN ----------------
   useEffect(() => {
-  const loggedIn = localStorage.getItem('isLoggedIn');
-
-  if (loggedIn === 'true') {
-    setIsLoggedIn(true);
-  }
-
-  const savedCollaborators =
-    localStorage.getItem('collaborators');
-
-  if (savedCollaborators) {
-    setCollaborators(
-      JSON.parse(savedCollaborators)
-    );
-  }
-
-  fetchEntries();
-}, []);
-
-const fetchEntries = async () => {
-  try {
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/entries`
-    );
-
-    const data = await response.json();
-
-    setEntries(data);
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-  useEffect(() => {
-    localStorage.setItem('collaborators', JSON.stringify(collaborators));
-  }, [collaborators]);
+    const logged = localStorage.getItem('isLoggedIn');
+    if (logged === 'true') setIsLoggedIn(true);
+  }, []);
 
   const handleLogin = () => {
     setIsLoggedIn(true);
@@ -94,196 +80,196 @@ const fetchEntries = async () => {
     localStorage.removeItem('isLoggedIn');
   };
 
+  // ---------------- LOAD ENTRIES ----------------
+  const loadEntries = async () => {
+    const res = await fetch('http://localhost:3000/entries');
+    const data = await res.json();
+    setEntries(Array.isArray(data) ? data : []);
+  };
+
+  useEffect(() => {
+    loadEntries();
+  }, []);
+
+  // ---------------- FILTER ----------------
+  const filteredEntries = entries.filter(e => {
+    const date = e.entryDate?.split('T')[0];
+    if (startDate && date < startDate) return false;
+    if (endDate && date > endDate) return false;
+    return true;
+  });
+
+  // ---------------- ADD ENTRY ----------------
+  const addEntry = async (entry: any) => {
+    const res = await fetch('http://localhost:3000/entries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    });
+
+    const data = await res.json();
+    setEntries(prev => [data, ...prev]);
+    showToast('Registro creado');
+  };
+
+  // ---------------- ADD COLLABORATOR (FIX) ----------------
   const addCollaborator = (collaborator: Omit<Collaborator, 'id'>) => {
-    const newCollaborator = { ...collaborator, id: Date.now().toString() };
-    setCollaborators([...collaborators, newCollaborator]);
-    return newCollaborator;
-  };
-
-  const addEntry = (entry: Omit<EntryRecord, 'id' | 'entryDate' | 'entryTime'>) => {
-    const now = new Date();
-    const newEntry: EntryRecord = {
-      ...entry,
+    const newCol: Collaborator = {
+      ...collaborator,
       id: Date.now().toString(),
-      entryDate: now.toLocaleDateString('es-ES'),
-      entryTime: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
     };
-    setEntries([...entries, newEntry]);
+
+    setCollaborators(prev => [...prev, newCol]);
+    return newCol;
   };
 
-  if (!isLoggedIn) {
-    return <LoginScreen onLogin={handleLogin} />;
-  }
+  // ---------------- DELETE ----------------
+  const deleteEntry = async (id: string) => {
+    await fetch(`http://localhost:3000/entries/${id}`, {
+      method: 'DELETE',
+    });
 
-  const totalEntries = entries.length;
-  const totalCollaborators = collaborators.length;
-  const today = new Date().toLocaleDateString('es-ES');
-  const todayEntries = entries.filter((e) => e.entryDate === today).length;
+    await loadEntries();
+    showToast('Eliminado');
+  };
+
+  // ---------------- EXCEL ----------------
+  const exportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredEntries);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Entradas');
+    XLSX.writeFile(wb, 'entradas.xlsx');
+  };
+
+  // ---------------- PDF (FIX IMPORT + AUTO TABLE) ----------------
+  const exportPDF = () => {
+    const doc = new jsPDF();
+
+    const tableData = filteredEntries.map(e => [
+      e.id,
+      e.collaboratorName,
+      e.objectName,
+      e.category,
+      e.entryDate,
+      e.status,
+    ]);
+
+    autoTable(doc, {
+      head: [['ID', 'Colaborador', 'Objeto', 'Categoría', 'Fecha', 'Estado']],
+      body: tableData,
+    });
+
+    doc.save('entradas.pdf');
+  };
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const todayEntries = entries.filter(
+    e => e.entryDate?.split('T')[0] === today
+  ).length;
+
+  if (!isLoggedIn) return <LoginScreen onLogin={handleLogin} />;
 
   return (
-    <div className="min-h-screen bg-[#f8f9fc]">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <Package className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-[1.5rem] font-semibold text-gray-900">
-              Control de Ingreso - Seguridad
-            </h1>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <LogOut className="w-5 h-5" />
-            <span>Cerrar sesión</span>
-          </button>
+    <div className="min-h-screen bg-gray-100">
+
+      {/* TOAST */}
+      {toast && (
+        <div className="fixed top-4 right-4 bg-black text-white px-4 py-2 rounded-lg">
+          {toast}
         </div>
+      )}
+
+      {/* HEADER */}
+      <header className="bg-white border-b p-4 flex justify-between">
+        <h1 className="font-bold flex items-center gap-2">
+          <Package /> Control de Ingreso
+        </h1>
+        <button onClick={handleLogout}><LogOut /></button>
       </header>
 
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex gap-1">
-            {[
-              { id: 'dashboard', label: 'Dashboard', icon: Package },
-              { id: 'register', label: 'Registrar Ingreso', icon: ArrowDownCircle },
-              { id: 'salidas', label: 'Registrar Salida', icon: ArrowDownCircle },
-              { id: 'collaborators', label: 'Colaboradores', icon: Users },
-              { id: 'history', label: 'Historial', icon: History },
-              ...(user.role === 'admin'
-                ? [
-                    {
-                      id: 'users',
-                      label: 'Usuarios',
-                      icon: Users,
-                    },
-                  ]
-                : []),
-
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* NAV */}
+      <nav className="bg-white flex gap-4 p-3 border-b">
+        {['dashboard','register','salidas','history','users'].map(t => (
+          <button
+            key={t}
+            onClick={() => setActiveTab(t)}
+            className={activeTab === t ? 'text-blue-600 font-bold' : ''}
+          >
+            {t}
+          </button>
+        ))}
       </nav>
 
-      {/* Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="p-6">
+
+        {/* DASHBOARD */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-8">
-            {/* Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <MetricCard
-                title="Ingresos Totales"
-                value={totalEntries}
-                icon={Package}
-                color="blue"
-              />
-              <MetricCard
-                title="Ingresos Hoy"
-                value={todayEntries}
-                icon={ArrowDownCircle}
-                color="green"
-              />
-              <MetricCard
-                title="Colaboradores Registrados"
-                value={totalCollaborators}
-                icon={Users}
-                color="orange"
-              />
+          <div className="space-y-6">
+
+            <div className="grid grid-cols-3 gap-4">
+              <MetricCard title="Total" value={entries.length} icon={Package} color="blue" />
+              <MetricCard title="Hoy" value={todayEntries} icon={ArrowDownCircle} color="green" />
+              <MetricCard title="Usuarios" value={collaborators.length} icon={Users} color="orange" />
             </div>
 
-            {/* Quick Actions */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-[1.25rem] font-semibold text-gray-900 mb-4">
-                Accesos Rápidos
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button
-                  onClick={() => setActiveTab('register')}
-                  className="flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
-                >
-                  <ArrowDownCircle className="w-5 h-5" />
-                  <span>Registrar Ingreso</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('collaborators')}
-                  className="flex items-center gap-3 p-4 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg transition-colors"
-                >
-                  <Users className="w-5 h-5" />
-                  <span>Ver Colaboradores</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('history')}
-                  className="flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors"
-                >
-                  <History className="w-5 h-5" />
-                  <span>Ver Historial</span>
-                </button>
-              </div>
+            {/* FILTROS + EXPORT (MEJORADOS) */}
+            <div className="flex gap-3 items-center flex-wrap">
+
+              <input type="date" onChange={e => setStartDate(e.target.value)} />
+              <input type="date" onChange={e => setEndDate(e.target.value)} />
+
+              <button
+                onClick={exportExcel}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow"
+              >
+                📊 Excel
+              </button>
+
+              <button
+                onClick={exportPDF}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow"
+              >
+                📄 PDF
+              </button>
             </div>
+
+            {/* ACTIVIDAD */}
+            <div className="bg-white p-4 rounded-lg">
+              <h2 className="font-bold mb-3">Actividad reciente</h2>
+
+              {entries.slice(0, 5).map(e => (
+                <div key={e.id} className="flex justify-between border-b py-2">
+                  <span>{e.objectName} - {e.collaboratorName}</span>
+                  <span>{e.status}</span>
+                </div>
+              ))}
+            </div>
+
           </div>
         )}
 
+        {/* REGISTER */}
         {activeTab === 'register' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-[1.25rem] font-semibold text-gray-900 mb-6">
-              Registrar Ingreso de Objeto
-            </h2>
-            <EntryForm
-              collaborators={collaborators}
-              onSubmit={addEntry}
-              onAddCollaborator={addCollaborator}
-            />
-          </div>
+          <EntryForm
+            collaborators={collaborators}
+            onSubmit={addEntry}
+            onAddCollaborator={addCollaborator}
+          />
         )}
 
-        {activeTab === 'collaborators' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-[1.25rem] font-semibold text-gray-900 mb-6">
-              Colaboradores Registrados
-            </h2>
-            <CollaboratorsList collaborators={collaborators} />
-          </div>
-        )}
-
+        {/* HISTORY */}
         {activeTab === 'history' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-[1.25rem] font-semibold text-gray-900 mb-6">
-              Historial de Ingresos
-            </h2>
-            <HistoryTable entries={entries} />
-          </div>
-
+          <HistoryTable entries={filteredEntries} />
         )}
+
+        {/* SALIDAS */}
         {activeTab === 'salidas' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-[1.25rem] font-semibold text-gray-900 mb-6">
-              Registrar Salida de Objetos
-            </h2>
-            <Salidas entries={entries} setEntries={setEntries} />
-          </div>
+          <Salidas entries={entries} setEntries={setEntries} onDelete={deleteEntry} />
         )}
 
-        {activeTab === 'users' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <Usuarios />
-          </div>
-        )}
+        {/* USERS */}
+        {activeTab === 'users' && <Usuarios />}
 
       </main>
     </div>

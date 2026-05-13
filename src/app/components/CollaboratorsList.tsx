@@ -4,9 +4,11 @@ import type { Collaborator } from '../App';
 
 interface CollaboratorsListProps {
   collaborators: Collaborator[];
+  onDelete?: (id: string) => void;
+  onEdit?: (collaborator: Collaborator) => void;
 }
 
-export function CollaboratorsList({ collaborators }: CollaboratorsListProps) {
+export function CollaboratorsList({ collaborators, onDelete, onEdit }: CollaboratorsListProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredCollaborators = collaborators.filter((collaborator) =>
@@ -49,37 +51,61 @@ export function CollaboratorsList({ collaborators }: CollaboratorsListProps) {
           </div>
         ) : (
           filteredCollaborators.map((collaborator) => (
-            <div
-              key={collaborator.id}
-              className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start gap-3 mb-3">
-                <div className="bg-blue-100 p-2 rounded-full">
-                  <User className="w-5 h-5 text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-gray-900 truncate">
-                    {collaborator.fullName}
-                  </h3>
-                  <p className="text-sm text-gray-600">{collaborator.document}</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Cargo:</span>
-                  <span className="text-sm font-medium text-gray-900">
-                    {collaborator.position}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Área:</span>
-                  <span className="text-sm font-medium text-gray-900 capitalize">
-                    {collaborator.area}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))
+  <div
+    key={collaborator.id}
+    className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow"
+  >
+    <div className="flex items-start gap-3 mb-3">
+      <div className="bg-blue-100 p-2 rounded-full">
+        <User className="w-5 h-5 text-blue-600" />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-gray-900 truncate">
+          {collaborator.fullName}
+        </h3>
+        <p className="text-sm text-gray-600">
+          {collaborator.document}
+        </p>
+      </div>
+    </div>
+
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-600">Cargo:</span>
+        <span className="text-sm font-medium text-gray-900">
+          {collaborator.position}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-600">Área:</span>
+        <span className="text-sm font-medium text-gray-900 capitalize">
+          {collaborator.area}
+        </span>
+      </div>
+    </div>
+
+    {/* EDITAR */}
+    {onEdit && (
+      <button
+        onClick={() => onEdit(collaborator)}
+        className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+      >
+        Editar
+      </button>
+    )}
+    {/* 🔥 BOTONES QUE PEDISTE */}
+    <div className="flex gap-2 mt-4">
+      <button
+        onClick={() => onDelete?.(collaborator.id)}
+        className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200"
+      >
+        Eliminar
+      </button>
+    </div>
+  </div>
+))
         )}
       </div>
 
