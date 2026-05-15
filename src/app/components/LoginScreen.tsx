@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Lock, Shield } from 'lucide-react';
+import { apiUrl } from '../../api';
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -16,7 +17,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
   try {
     const response = await fetch(
-      'http://localhost:3000/auth/login',
+      apiUrl('/auth/login'),
       {
         method: 'POST',
         headers: {

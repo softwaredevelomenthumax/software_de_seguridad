@@ -3,52 +3,75 @@ const db = require('../db');
 // =====================================
 // REGISTRAR SALIDA
 // =====================================
-const registerExit = (req, res) => {
-  const { id } = req.body;
+const registerExit = async (req, res) => {
+  try {
 
-  const sql = `
-    UPDATE entries
-    SET 
-      status = 'FUERA',
-      exitDate = CURDATE(),
-      exitTime = CURTIME()
-    WHERE id = ?
-  `;
+    const { id } = req.body;
 
-  db.query(sql, [id], (err, result) => {
-    if (err) {
-      console.log(err);
-      return res.status(500).json(err);
+    if (!id) {
+      return res.status(400).json({
+        error: 'ID requerido',
+      });
     }
+
+    await db.query(
+      `
+      UPDATE entries
+      SET
+        status = 'FUERA',
+        exitDate = CURDATE(),
+        exitTime = CURTIME()
+      WHERE id = ?
+      `,
+      [id]
+    );
 
     res.json({
       message: 'Salida registrada correctamente',
     });
-  });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: error.message,
+    });
+  }
 };
 
 // =====================================
 // ELIMINAR REGISTRO
 // =====================================
-const deleteEntry = (req, res) => {
-  const { id } = req.params;
+const deleteEntry = async (req, res) => {
+  try {
 
-  const sql = 'DELETE FROM entries WHERE id = ?';
+    const { id } = req.params;
 
-  db.query(sql, [id], (err, result) => {
-    if (err) {
-      console.log(err);
-      return res.status(500).json(err);
-    }
+    await db.query(
+      `
+      DELETE FROM entries
+      WHERE id = ?
+      `,
+      [id]
+    );
 
     res.json({
       message: 'Eliminado correctamente',
     });
-  });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: error.message,
+    });
+  }
 };
 
 // =====================================
-// EXPORTS (UNO SOLO)
+// EXPORTS
 // =====================================
 module.exports = {
   registerExit,

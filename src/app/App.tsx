@@ -1,33 +1,20 @@
 import { useState, useEffect } from 'react';
 import {
   Package,
-  Users,
   LogOut,
-  History,
-  ArrowDownCircle,
 } from 'lucide-react';
 
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import 'jspdf-autotable';
 
 import { LoginScreen } from './components/LoginScreen';
-import { MetricCard } from './components/MetricCard';
-import { CollaboratorsList } from './components/CollaboratorsList';
 import { EntryForm } from './components/EntryForm';
 import { HistoryTable } from './components/HistoryTable';
+import { apiUrl } from '../api';
 
 import Salidas from '../pages/Salidas';
 import Usuarios from '../pages/Usuarios';
-
-// ---------------- TYPES ----------------
-export interface Collaborator {
-  id: string;
-  fullName: string;
-  document: string;
-  position: string;
-  area: string;
-}
 
 export interface EntryRecord {
   id: string;
@@ -52,7 +39,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const [entries, setEntries] = useState<EntryRecord[]>([]);
-  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [collaborators, setCollaborators] = useState<any[]>([]);
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -64,7 +51,7 @@ export default function App() {
     setTimeout(() => setToast(''), 2500);
   };
 
-  // ---------------- LOGIN ----------------
+  // ================= LOGIN =================
   useEffect(() => {
     const logged = localStorage.getItem('isLoggedIn');
     if (logged === 'true') setIsLoggedIn(true);
@@ -80,18 +67,77 @@ export default function App() {
     localStorage.removeItem('isLoggedIn');
   };
 
-  // ---------------- LOAD ENTRIES ----------------
+  // ================= LOAD DATA =================
   const loadEntries = async () => {
-    const res = await fetch('http://localhost:3000/entries');
+    const res = await fetch(apiUrl('/entries'));
     const data = await res.json();
     setEntries(Array.isArray(data) ? data : []);
   };
 
+  const loadCollaborators = async () => {
+    const res = await fetch(apiUrl('/collaborators'));
+    const data = await res.json();
+    setCollaborators(Array.isArray(data) ? data : []);
+  };
+
   useEffect(() => {
     loadEntries();
+    loadCollaborators();
   }, []);
 
-  // ---------------- FILTER ----------------
+  // ================= ADD COLLABORATOR =================
+  const addCollaborator = async (collaborator: {
+    fullName: string;
+    document: string;
+    position: string;
+    area: string;
+  }) => {
+    const res = await fetch(apiUrl('/collaborators'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(collaborator),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'No se pudo crear el colaborador');
+
+    setCollaborators(prev => [...prev, data]);
+
+    return data;
+  };
+
+  // ================= ADD ENTRY (FIXED) =================
+  const addEntry = async (entry: any) => {
+    const res = await fetch(apiUrl('/entries'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...entry,
+        status: 'DENTRO'
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'No se pudo crear el registro');
+
+    setEntries(prev => [data, ...prev]);
+  };
+
+  // ================= DELETE =================
+  const deleteEntry = async (id: string) => {
+    await fetch(apiUrl(`/entries/${id}`), {
+      method: 'DELETE',
+    });
+
+    await loadEntries();
+    showToast('Registro eliminado');
+  };
+
+  // ================= FILTER =================
   const filteredEntries = entries.filter(e => {
     const date = e.entryDate?.split('T')[0];
     if (startDate && date < startDate) return false;
@@ -99,49 +145,16 @@ export default function App() {
     return true;
   });
 
-  // ---------------- ADD ENTRY ----------------
-  const addEntry = async (entry: any) => {
-    const res = await fetch('http://localhost:3000/entries', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry),
-    });
-
-    const data = await res.json();
-    setEntries(prev => [data, ...prev]);
-    showToast('Registro creado');
-  };
-
-  // ---------------- ADD COLLABORATOR (FIX) ----------------
-  const addCollaborator = (collaborator: Omit<Collaborator, 'id'>) => {
-    const newCol: Collaborator = {
-      ...collaborator,
-      id: Date.now().toString(),
-    };
-
-    setCollaborators(prev => [...prev, newCol]);
-    return newCol;
-  };
-
-  // ---------------- DELETE ----------------
-  const deleteEntry = async (id: string) => {
-    await fetch(`http://localhost:3000/entries/${id}`, {
-      method: 'DELETE',
-    });
-
-    await loadEntries();
-    showToast('Eliminado');
-  };
-
-  // ---------------- EXCEL ----------------
+  // ================= EXPORT EXCEL =================
   const exportExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filteredEntries);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Entradas');
     XLSX.writeFile(wb, 'entradas.xlsx');
+    showToast('Exportado a Excel');
   };
 
-  // ---------------- PDF (FIX IMPORT + AUTO TABLE) ----------------
+  // ================= EXPORT PDF =================
   const exportPDF = () => {
     const doc = new jsPDF();
 
@@ -154,20 +167,16 @@ export default function App() {
       e.status,
     ]);
 
-    autoTable(doc, {
+    (doc as any).autoTable({
       head: [['ID', 'Colaborador', 'Objeto', 'Categoría', 'Fecha', 'Estado']],
       body: tableData,
     });
 
     doc.save('entradas.pdf');
+    showToast('Exportado a PDF');
   };
 
-  const today = new Date().toISOString().split('T')[0];
-
-  const todayEntries = entries.filter(
-    e => e.entryDate?.split('T')[0] === today
-  ).length;
-
+  // ================= AUTH =================
   if (!isLoggedIn) return <LoginScreen onLogin={handleLogin} />;
 
   return (
@@ -182,70 +191,41 @@ export default function App() {
 
       {/* HEADER */}
       <header className="bg-white border-b p-4 flex justify-between">
-        <h1 className="font-bold flex items-center gap-2">
+        <h1 className="flex items-center gap-2 font-bold">
           <Package /> Control de Ingreso
         </h1>
-        <button onClick={handleLogout}><LogOut /></button>
+
+        <button onClick={handleLogout}>
+          <LogOut />
+        </button>
       </header>
 
       {/* NAV */}
       <nav className="bg-white flex gap-4 p-3 border-b">
-        {['dashboard','register','salidas','history','users'].map(t => (
+        {[
+          { id: 'dashboard', label: 'Inicio' },
+          { id: 'register', label: 'Registrar' },
+          { id: 'salidas', label: 'Salidas' },
+          { id: 'history', label: 'Historial' },
+          { id: 'users', label: 'Usuarios' },
+        ].map(t => (
           <button
-            key={t}
-            onClick={() => setActiveTab(t)}
-            className={activeTab === t ? 'text-blue-600 font-bold' : ''}
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={activeTab === t.id ? 'text-blue-600' : ''}
           >
-            {t}
+            {t.label}
           </button>
         ))}
       </nav>
 
+      {/* MAIN */}
       <main className="p-6">
 
-        {/* DASHBOARD */}
+        {/* DASHBOARD (LOGO) */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-
-            <div className="grid grid-cols-3 gap-4">
-              <MetricCard title="Total" value={entries.length} icon={Package} color="blue" />
-              <MetricCard title="Hoy" value={todayEntries} icon={ArrowDownCircle} color="green" />
-              <MetricCard title="Usuarios" value={collaborators.length} icon={Users} color="orange" />
-            </div>
-
-            {/* FILTROS + EXPORT (MEJORADOS) */}
-            <div className="flex gap-3 items-center flex-wrap">
-
-              <input type="date" onChange={e => setStartDate(e.target.value)} />
-              <input type="date" onChange={e => setEndDate(e.target.value)} />
-
-              <button
-                onClick={exportExcel}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow"
-              >
-                📊 Excel
-              </button>
-
-              <button
-                onClick={exportPDF}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow"
-              >
-                📄 PDF
-              </button>
-            </div>
-
-            {/* ACTIVIDAD */}
-            <div className="bg-white p-4 rounded-lg">
-              <h2 className="font-bold mb-3">Actividad reciente</h2>
-
-              {entries.slice(0, 5).map(e => (
-                <div key={e.id} className="flex justify-between border-b py-2">
-                  <span>{e.objectName} - {e.collaboratorName}</span>
-                  <span>{e.status}</span>
-                </div>
-              ))}
-            </div>
-
+          <div className="flex items-center justify-center min-h-[100vh]">
+            <img src="/img/logo.png" alt="Logo" className="w-48 md:w-64 object-contain" />
           </div>
         )}
 
@@ -260,12 +240,50 @@ export default function App() {
 
         {/* HISTORY */}
         {activeTab === 'history' && (
-          <HistoryTable entries={filteredEntries} />
+          <div className="space-y-4">
+
+            <div className="flex gap-3 flex-wrap">
+
+              <input
+                type="date"
+                onChange={e => setStartDate(e.target.value)}
+                className="border px-3 py-2 rounded"
+              />
+
+              <input
+                type="date"
+                onChange={e => setEndDate(e.target.value)}
+                className="border px-3 py-2 rounded"
+              />
+
+              <button
+                onClick={exportExcel}
+                className="bg-green-600 text-white px-4 py-2 rounded"
+              >
+                Exportar Excel
+              </button>
+
+              <button
+                onClick={exportPDF}
+                className="bg-red-600 text-white px-4 py-2 rounded"
+              >
+                Exportar PDF
+              </button>
+
+            </div>
+
+            <HistoryTable entries={filteredEntries} />
+
+          </div>
         )}
 
         {/* SALIDAS */}
         {activeTab === 'salidas' && (
-          <Salidas entries={entries} setEntries={setEntries} onDelete={deleteEntry} />
+          <Salidas
+            entries={entries}
+            setEntries={setEntries}
+            onDelete={deleteEntry}
+          />
         )}
 
         {/* USERS */}

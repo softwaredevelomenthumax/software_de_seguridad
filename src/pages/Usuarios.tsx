@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiUrl } from '../api';
 
 interface User {
   id: number;
@@ -29,7 +30,7 @@ export default function Usuarios() {
   const fetchUsers = async () => {
     try {
       const response = await fetch(
-        'http://localhost:3000/auth/users'
+        apiUrl('/auth/users')
       );
 
       const data = await response.json();
@@ -48,7 +49,7 @@ export default function Usuarios() {
   const createUser = async () => {
     try {
       await fetch(
-        'http://localhost:3000/auth/register',
+        apiUrl('/auth/register'),
         {
           method: 'POST',
           headers: {

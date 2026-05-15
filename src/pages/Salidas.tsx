@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { EntryRecord } from '../app/App';
+import { apiUrl } from '../api';
 
 interface SalidasProps {
   entries: EntryRecord[];
@@ -15,12 +16,15 @@ export default function Salidas({
   const [document, setDocument] = useState('');
   const [selectedObject, setSelectedObject] = useState('');
 
+  // SOLO activos
   const activeEntries = entries.filter(
-    (item) =>
+    item =>
       item.collaboratorDocument === document &&
-      item.status !== 'SALIDA'
+      item.status !== 'SALIDA' &&
+      item.status !== 'FUERA'
   );
 
+  // ================= REGISTRAR SALIDA =================
   const registerExit = async () => {
     if (!selectedObject) {
       alert('Seleccione un objeto');
@@ -30,21 +34,26 @@ export default function Salidas({
     try {
       const now = new Date();
 
-      const res = await fetch(`http://localhost:3000/exits`, {
-        method: 'PUT',
+      // ✔️ FORMATO MYSQL CORRECTO
+      const exitDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const exitTime = now.toTimeString().split(' ')[0]; // HH:MM:SS
+
+      const res = await fetch(apiUrl('/exits'), {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           id: selectedObject,
-          exitDate: now.toISOString(),
+          exitDate,
+          exitTime,
+          status: 'SALIDA',
         }),
       });
 
       if (!res.ok) throw new Error('Error al registrar salida');
 
-      // 🔥 RELOAD REAL DESDE BACKEND
-      const updated = await fetch('http://localhost:3000/entries');
+      const updated = await fetch(apiUrl('/entries'));
       const data = await updated.json();
 
       setEntries(Array.isArray(data) ? data : []);
@@ -105,6 +114,7 @@ export default function Salidas({
       {/* TABLE */}
       <div className="mt-10 overflow-x-auto">
         <table className="w-full">
+
           <thead>
             <tr>
               <th>Documento</th>
@@ -122,7 +132,9 @@ export default function Salidas({
 
                 <td>{item.collaboratorDocument}</td>
                 <td>{item.objectName}</td>
+
                 <td>{item.entryDate} - {item.entryTime}</td>
+
                 <td>
                   {item.exitDate
                     ? `${item.exitDate} - ${item.exitTime}`
@@ -136,10 +148,7 @@ export default function Salidas({
                 <td>
                   <button
                     onClick={() => {
-                      const ok = window.confirm(
-                        '¿Seguro que deseas eliminar?'
-                      );
-
+                      const ok = window.confirm('¿Seguro que deseas eliminar?');
                       if (ok) onDelete(item.id);
                     }}
                     className="bg-red-500 text-white px-3 py-1 rounded"
@@ -151,6 +160,7 @@ export default function Salidas({
               </tr>
             ))}
           </tbody>
+
         </table>
       </div>
 

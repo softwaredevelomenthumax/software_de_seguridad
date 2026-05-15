@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import type { EntryRecord } from '../App';
-import type { Collaborator } from '../types';
+import type { Collaborator } from '../../types';
 
 import { SignaturePad } from './SignaturePad';
 import { CameraCapture } from './CameraCapture';
@@ -17,11 +17,11 @@ interface EntryFormProps {
 
   onSubmit: (
     entry: Omit<EntryRecord, 'id' | 'entryDate' | 'entryTime'>
-  ) => void;
+  ) => Promise<void> | void;
 
   onAddCollaborator: (
     collaborator: Omit<Collaborator, 'id'>
-  ) => Collaborator;
+  ) => Promise<Collaborator>;
 }
 
 export function EntryForm({
@@ -47,7 +47,8 @@ export function EntryForm({
   const [newCollaborator, setNewCollaborator] = useState({
     fullName: '',
     document: '',
-    position: '', // CARGO
+    position: '',
+    area: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,19 +68,33 @@ export function EntryForm({
     let collaboratorName = '';
     let collaboratorDocument = '';
 
+    // ================= NUEVO COLABORADOR =================
     if (mode === 'new') {
-      const added = onAddCollaborator(newCollaborator);
+      if (!newCollaborator.fullName || !newCollaborator.document || !newCollaborator.position) {
+        alert('Debes completar el colaborador');
+        return;
+      }
 
-      collaboratorId = added.id;
+      const added = await onAddCollaborator(newCollaborator);
+
+      collaboratorId = String(added.id);
       collaboratorName = added.fullName;
       collaboratorDocument = added.document;
-    } else {
-      const collaborator = collaborators.find(c => c.id === collaboratorId);
+    }
 
-      if (collaborator) {
-        collaboratorName = collaborator.fullName;
-        collaboratorDocument = collaborator.document;
+    // ================= EXISTENTE =================
+    else {
+      const collaborator = collaborators.find(
+        c => String(c.id) === String(collaboratorId)
+      );
+
+      if (!collaborator) {
+        alert('Selecciona un colaborador válido');
+        return;
       }
+
+      collaboratorName = collaborator.fullName;
+      collaboratorDocument = collaborator.document;
     }
 
     const data = {
@@ -96,20 +111,17 @@ export function EntryForm({
       notes: formData.notes,
     };
 
-    const response = await fetch('http://localhost:3000/entries', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-
-    const result = await response.json();
-
-    onSubmit(result);
+    try {
+      await onSubmit(data);
+    } catch (error) {
+      console.error(error);
+      alert('No se pudo registrar el ingreso');
+      return;
+    }
 
     alert('Ingreso registrado correctamente');
 
+    // RESET
     setFormData({
       collaboratorId: '',
       objectName: '',
@@ -124,6 +136,7 @@ export function EntryForm({
       fullName: '',
       document: '',
       position: '',
+      area: '',
     });
 
     setMode('existing');
@@ -139,6 +152,7 @@ export function EntryForm({
         </h3>
 
         <div className="flex gap-4 mb-6">
+
           <button
             type="button"
             onClick={() => setMode('existing')}
@@ -164,6 +178,7 @@ export function EntryForm({
             <UserPlus className="w-5 h-5" />
             Nuevo
           </button>
+
         </div>
 
         {mode === 'existing' ? (
@@ -184,11 +199,15 @@ export function EntryForm({
           </select>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
             <input
               placeholder="Nombre completo"
               value={newCollaborator.fullName}
               onChange={e =>
-                setNewCollaborator({ ...newCollaborator, fullName: e.target.value })
+                setNewCollaborator({
+                  ...newCollaborator,
+                  fullName: e.target.value
+                })
               }
               className="px-4 py-2 border border-gray-300 rounded-lg"
             />
@@ -197,7 +216,10 @@ export function EntryForm({
               placeholder="Documento"
               value={newCollaborator.document}
               onChange={e =>
-                setNewCollaborator({ ...newCollaborator, document: e.target.value })
+                setNewCollaborator({
+                  ...newCollaborator,
+                  document: e.target.value
+                })
               }
               className="px-4 py-2 border border-gray-300 rounded-lg"
             />
@@ -206,7 +228,10 @@ export function EntryForm({
               placeholder="Cargo"
               value={newCollaborator.position}
               onChange={e =>
-                setNewCollaborator({ ...newCollaborator, position: e.target.value })
+                setNewCollaborator({
+                  ...newCollaborator,
+                  position: e.target.value
+                })
               }
               className="md:col-span-2 px-4 py-2 border border-gray-300 rounded-lg"
             />
@@ -256,7 +281,6 @@ export function EntryForm({
       {/* FOTO + FIRMA */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* FOTO */}
         <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
           <h3 className="font-semibold mb-4">Fotografía</h3>
 
@@ -268,13 +292,12 @@ export function EntryForm({
               onClick={() => setShowCamera(true)}
               className="w-full flex items-center justify-center gap-2 px-4 py-8 bg-blue-50 text-blue-600 rounded-lg border-2 border-dashed border-blue-300"
             >
-              <Camera className="w-6 h-6" />
+              <Camera />
               Tomar Fotografía
             </button>
           )}
         </div>
 
-        {/* FIRMA */}
         <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
           <h3 className="font-semibold mb-4">Firma *</h3>
 
@@ -286,22 +309,21 @@ export function EntryForm({
               onClick={() => setShowSignature(true)}
               className="w-full flex items-center justify-center gap-2 px-4 py-8 bg-green-50 text-green-600 rounded-lg border-2 border-dashed border-green-300"
             >
-              <FileSignature className="w-6 h-6" />
+              <FileSignature />
               Capturar Firma
             </button>
           )}
         </div>
+
       </div>
 
-      {/* BOTÓN */}
       <button
         type="submit"
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
+        className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold"
       >
         Registrar Ingreso
       </button>
 
-      {/* MODALES */}
       {showCamera && (
         <CameraCapture
           onCapture={img => {
@@ -321,6 +343,7 @@ export function EntryForm({
           onClose={() => setShowSignature(false)}
         />
       )}
+
     </form>
   );
 }

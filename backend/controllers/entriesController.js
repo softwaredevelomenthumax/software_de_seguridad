@@ -1,39 +1,42 @@
 const db = require('../db');
 
-// ==============================
-// GET ENTRIES
-// ==============================
-const getEntries = (req, res) => {
-  const sql = 'SELECT * FROM entries ORDER BY id DESC';
+// ================= GET ENTRIES =================
+const getEntries = async (req, res) => {
+  try {
 
-  db.query(sql, (err, results) => {
-    if (err) {
-      console.log(err);
-      return res.status(500).json(err);
-    }
+    const [rows] = await db.query(
+      `
+      SELECT *
+      FROM entries
+      ORDER BY id DESC
+      `
+    );
 
-    res.json(results);
-  });
+    res.json(rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: error.message,
+    });
+  }
 };
 
-// ==============================
-// CREATE ENTRY
-// ==============================
-const createEntry = (req, res) => {
-  const {
-    collaboratorId,
-    collaboratorName,
-    collaboratorDocument,
-    objectName,
-    objectDescription,
-    category,
-    photo,
-    signature,
-    notes,
-  } = req.body;
+// ================= CREATE ENTRY =================
+const createEntry = async (req, res) => {
+  try {
 
-  const sql = `
-    INSERT INTO entries (
+    const now = new Date();
+
+    // FECHA YYYY-MM-DD
+    const entryDate = now.toISOString().split('T')[0];
+
+    // HORA HH:MM:SS
+    const entryTime = now.toTimeString().split(' ')[0];
+
+    const {
       collaboratorId,
       collaboratorName,
       collaboratorDocument,
@@ -43,73 +46,105 @@ const createEntry = (req, res) => {
       photo,
       signature,
       notes,
-      entryDate,
-      entryTime,
-      status
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), CURTIME(), ?)
-  `;
+    } = req.body;
 
-  const values = [
-    collaboratorId,
-    collaboratorName,
-    collaboratorDocument,
-    objectName,
-    objectDescription,
-    category,
-    photo || null,
-    signature || null,
-    notes || null,
-    'DENTRO',
-  ];
-
-  db.query(sql, values, (err, result) => {
-    if (err) {
-      console.log(err);
-      return res.status(500).json(err);
-    }
-
-    res.json({
-      id: result.insertId.toString(),
-      ...req.body,
-      entryDate: new Date().toISOString().split('T')[0],
-      entryTime: new Date().toLocaleTimeString('es-ES'),
-      status: 'DENTRO',
-    });
-  });
-};
-
-// ==============================
-// DELETE ENTRY (CORRECTO)
-// ==============================
-const deleteEntry = (req, res) => {
-  const { id } = req.params;
-
-  const checkSql = 'SELECT * FROM entries WHERE id = ?';
-
-  db.query(checkSql, [id], (err, result) => {
-    if (err) return res.status(500).json(err);
-
-    if (result.length === 0) {
-      return res.status(404).json({ message: 'No existe' });
-    }
-
-    const entry = result[0];
-
-    if (!entry.exitDate) {
+    // VALIDACIONES
+    if (
+      !collaboratorId ||
+      !collaboratorName ||
+      !collaboratorDocument ||
+      !objectName ||
+      !category
+    ) {
       return res.status(400).json({
-        message: 'Debe registrar salida antes de eliminar',
+        error: 'Faltan campos obligatorios',
       });
     }
 
-    const sql = 'DELETE FROM entries WHERE id = ?';
+    const [result] = await db.query(
+      `
+      INSERT INTO entries (
+        collaboratorId,
+        collaboratorName,
+        collaboratorDocument,
+        objectName,
+        objectDescription,
+        category,
+        photo,
+        signature,
+        entryDate,
+        entryTime,
+        notes,
+        status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        collaboratorId,
+        collaboratorName,
+        collaboratorDocument,
+        objectName,
+        objectDescription || '',
+        category,
+        photo || '',
+        signature || '',
+        entryDate,
+        entryTime,
+        notes || '',
+        'DENTRO',
+      ]
+    );
 
-    db.query(sql, [id], (err2) => {
-      if (err2) return res.status(500).json(err2);
-
-      res.json({ message: 'Eliminado correctamente' });
+    res.json({
+      id: result.insertId,
+      collaboratorId,
+      collaboratorName,
+      collaboratorDocument,
+      objectName,
+      objectDescription,
+      category,
+      photo,
+      signature,
+      entryDate,
+      entryTime,
+      notes,
+      status: 'DENTRO',
     });
-  });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: error.message,
+    });
+  }
+};
+
+// ================= DELETE ENTRY =================
+const deleteEntry = async (req, res) => {
+  try {
+
+    await db.query(
+      `
+      DELETE FROM entries
+      WHERE id = ?
+      `,
+      [req.params.id]
+    );
+
+    res.json({
+      message: 'Registro eliminado',
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: error.message,
+    });
+  }
 };
 
 module.exports = {
